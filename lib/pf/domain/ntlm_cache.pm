@@ -207,7 +207,7 @@ sub get_sync_samaccountname {
 
     # We need to fetch the sAMAccountName of the DN in the AD source
     my $result = $connection->search(
-        base => $source->{binddn}, 
+        base => $source->{basedn},
         filter => '(sAMAccountName=*)', 
         attrs => ['sAMAccountName'],
     );
