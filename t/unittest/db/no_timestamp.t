@@ -27,7 +27,7 @@ use Test::NoWarnings;
 use DBI;
 use pf::config qw(%Config);
 my $PF_DIR = '/usr/local/pf';
-my $schema = "$PF_DIR/db/pf-schema-X.Y.Z.sql";
+my $schema = "$PF_DIR/db/pf-schema-X.Y.sql";
 my $db_name = "pf_smoke_test__no_timestamp_$$";
 my ($dbuser, $dbpass) = @{$Config{database}}{qw(user pass)};
 my $dbh     = DBI->connect( "DBI:mysql:host=localhost", $dbuser, $dbpass, { RaiseError => 1 } );

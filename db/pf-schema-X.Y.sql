@@ -1356,7 +1356,7 @@ CREATE TABLE `dns_audit_log` (
 CREATE TABLE `admin_api_audit_log` (
   `id` BIGINT NOT NULL PRIMARY KEY AUTO_INCREMENT,
   `tenant_id` int(11) NOT NULL DEFAULT '1',
-  `created_at` timestamp(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `user_name` varchar(255) COLLATE utf8mb4_bin DEFAULT NULL,
   `action` varchar(255) COLLATE utf8mb4_bin DEFAULT NULL,
   `object_id` varchar(255) COLLATE utf8mb4_bin DEFAULT NULL,
