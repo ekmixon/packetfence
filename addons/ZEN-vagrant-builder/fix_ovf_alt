@@ -30,6 +30,5 @@ end = fp.find('<rasd:Caption>sound')
 start = fp.rfind('<Item>', 0, end)
 fp = fp[:start] + '<Item ovf:required="false">' + fp[start+len('<Item>'):]
 
-nfp = open('vmx_' + fn, 'wb')
-nfp.write(fp.encode('utf8'))
-nfp.close()
+with open(f'vmx_{fn}', 'wb') as nfp:
+    nfp.write(fp.encode('utf8'))

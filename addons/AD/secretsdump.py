@@ -402,15 +402,16 @@ class RemoteOperations:
         if self.__drsr is None:
             self.__connectDrds()
 
-        logging.debug('Calling DRSCrackNames for %s ' % name)
-        resp = drsuapi.hDRSCrackNames(self.__drsr, self.__hDrs, 0, formatOffered, formatDesired, (name,))
-        return resp
+        logging.debug(f'Calling DRSCrackNames for {name} ')
+        return drsuapi.hDRSCrackNames(
+            self.__drsr, self.__hDrs, 0, formatOffered, formatDesired, (name,)
+        )
 
     def DRSGetNCChanges(self, userEntry):
         if self.__drsr is None:
             self.__connectDrds()
 
-        logging.debug('Calling DRSGetNCChanges for %s ' % userEntry)
+        logging.debug(f'Calling DRSGetNCChanges for {userEntry} ')
         request = drsuapi.DRSGetNCChanges()
         request['hDrs'] = self.__hDrs
         request['dwInVersion'] = 8
@@ -477,21 +478,20 @@ class RemoteOperations:
         return resp['Sid']
 
     def getMachineNameAndDomain(self):
-        if self.__smbConnection.getServerName() == '':
-            # No serverName.. this is either because we're doing Kerberos
-            # or not receiving that data during the login process.
-            # Let's try getting it through RPC
-            rpc = transport.DCERPCTransportFactory(r'ncacn_np:445[\pipe\wkssvc]')
-            rpc.set_smb_connection(self.__smbConnection)
-            dce = rpc.get_dce_rpc()
-            dce.connect()
-            dce.bind(wkst.MSRPC_UUID_WKST)
-            resp = wkst.hNetrWkstaGetInfo(dce, 100)
-            dce.disconnect()
-            return resp['WkstaInfo']['WkstaInfo100']['wki100_computername'][:-1], resp['WkstaInfo']['WkstaInfo100'][
-                                                                                      'wki100_langroup'][:-1]
-        else:
+        if self.__smbConnection.getServerName() != '':
             return self.__smbConnection.getServerName(), self.__smbConnection.getServerDomain()
+        # No serverName.. this is either because we're doing Kerberos
+        # or not receiving that data during the login process.
+        # Let's try getting it through RPC
+        rpc = transport.DCERPCTransportFactory(r'ncacn_np:445[\pipe\wkssvc]')
+        rpc.set_smb_connection(self.__smbConnection)
+        dce = rpc.get_dce_rpc()
+        dce.connect()
+        dce.bind(wkst.MSRPC_UUID_WKST)
+        resp = wkst.hNetrWkstaGetInfo(dce, 100)
+        dce.disconnect()
+        return resp['WkstaInfo']['WkstaInfo100']['wki100_computername'][:-1], resp['WkstaInfo']['WkstaInfo100'][
+                                                                                  'wki100_langroup'][:-1]
 
     def getDefaultLoginAccount(self):
         try:
@@ -502,10 +502,7 @@ class RemoteOperations:
             dataType, dataValue = rrp.hBaseRegQueryValue(self.__rrp, keyHandle, 'DefaultDomainName')
             domain = dataValue[:-1]
             rrp.hBaseRegCloseKey(self.__rrp, keyHandle)
-            if len(domain) > 0:
-                return '%s\\%s' % (domain,username)
-            else:
-                return username
+            return '%s\\%s' % (domain,username) if len(domain) > 0 else username
         except:
             return None
 
@@ -534,11 +531,11 @@ class RemoteOperations:
         # Let's check its status
         ans = scmr.hRQueryServiceStatus(self.__scmr, self.__serviceHandle)
         if ans['lpServiceStatus']['dwCurrentState'] == scmr.SERVICE_STOPPED:
-            logging.info('Service %s is in stopped state'% self.__serviceName)
+            logging.info(f'Service {self.__serviceName} is in stopped state')
             self.__shouldStop = True
             self.__started = False
         elif ans['lpServiceStatus']['dwCurrentState'] == scmr.SERVICE_RUNNING:
-            logging.debug('Service %s is already running'% self.__serviceName)
+            logging.debug(f'Service {self.__serviceName} is already running')
             self.__shouldStop = False
             self.__started  = True
         else:
@@ -548,10 +545,10 @@ class RemoteOperations:
         if self.__started is False:
             ans = scmr.hRQueryServiceConfigW(self.__scmr,self.__serviceHandle)
             if ans['lpServiceConfig']['dwStartType'] == 0x4:
-                logging.info('Service %s is disabled, enabling it'% self.__serviceName)
+                logging.info(f'Service {self.__serviceName} is disabled, enabling it')
                 self.__disabled = True
                 scmr.hRChangeServiceConfigW(self.__scmr, self.__serviceHandle, dwStartType = 0x3)
-            logging.info('Starting service %s' % self.__serviceName)
+            logging.info(f'Starting service {self.__serviceName}')
             scmr.hRStartServiceW(self.__scmr,self.__serviceHandle)
             time.sleep(1)
 
@@ -615,7 +612,7 @@ class RemoteOperations:
         ans = rrp.hOpenLocalMachine(self.__rrp)
         self.__regHandle = ans['phKey']
         for key in ['JD','Skew1','GBG','Data']:
-            logging.debug('Retrieving class info for %s'% key)
+            logging.debug(f'Retrieving class info for {key}')
             ans = rrp.hBaseRegOpenKey(self.__rrp, self.__regHandle, 'SYSTEM\\CurrentControlSet\\Control\\Lsa\\%s' % key)
             keyHandle = ans['phkResult']
             ans = rrp.hBaseRegQueryInfoKey(self.__rrp,keyHandle)
@@ -629,7 +626,7 @@ class RemoteOperations:
         for i in xrange(len(bootKey)):
             self.__bootKey += bootKey[transforms[i]]
 
-        logging.info('Target system bootKey: 0x%s' % hexlify(self.__bootKey))
+        logging.info(f'Target system bootKey: 0x{hexlify(self.__bootKey)}')
 
         return self.__bootKey
 
@@ -664,9 +661,7 @@ class RemoteOperations:
         rrp.hBaseRegSaveKey(self.__rrp, keyHandle, tmpFileName)
         rrp.hBaseRegCloseKey(self.__rrp, keyHandle)
         rrp.hBaseRegCloseKey(self.__rrp, regHandle)
-        # Now let's open the remote file, so it can be read later
-        remoteFileName = RemoteFile(self.__smbConnection, 'SYSTEM32\\'+tmpFileName)
-        return remoteFileName
+        return RemoteFile(self.__smbConnection, 'SYSTEM32\\'+tmpFileName)
 
     def saveSAM(self):
         logging.debug('Saving remote SAM database')
@@ -678,8 +673,11 @@ class RemoteOperations:
 
     def __executeRemote(self, data):
         self.__tmpServiceName = ''.join([random.choice(string.letters) for _ in range(8)]).encode('utf-16le')
-        command = self.__shell + 'echo ' + data + ' ^> ' + self.__output + ' > ' + self.__batchFile + ' & ' + \
-                  self.__shell + self.__batchFile
+        command = (
+            f'{self.__shell}echo {data} ^> {self.__output} > {self.__batchFile} & '
+            + self.__shell
+        ) + self.__batchFile
+
         command += ' & ' + 'del ' + self.__batchFile
 
         self.__serviceDeleted = False
@@ -759,46 +757,48 @@ class RemoteOperations:
         rrp.hBaseRegCloseKey(self.__rrp, keyHandle)
         rrp.hBaseRegCloseKey(self.__rrp, regHandle)
 
-        logging.info('Registry says NTDS.dit is at %s. Calling vssadmin to get a copy. This might take some time' % ntdsLocation)
+        logging.info(
+            f'Registry says NTDS.dit is at {ntdsLocation}. Calling vssadmin to get a copy. This might take some time'
+        )
+
         # Get the list of remote shadows
         shadow, shadowFor = self.__getLastVSS()
-        if shadow == '' or (shadow != '' and shadowFor != ntdsDrive):
+        if shadow == '' or shadowFor != ntdsDrive:
             # No shadow, create one
             self.__executeRemote('%%COMSPEC%% /C vssadmin create shadow /For=%s' % ntdsDrive)
             shadow, shadowFor = self.__getLastVSS()
             shouldRemove = True
-            if shadow == '':
-                raise Exception('Could not get a VSS')
         else:
             shouldRemove = False
 
+        if shadow == '':
+            raise Exception('Could not get a VSS')
         # Now copy the ntds.dit to the temp directory
         tmpFileName = ''.join([random.choice(string.letters) for _ in range(8)]) + '.tmp'
 
         self.__executeRemote('%%COMSPEC%% /C copy %s%s %%SYSTEMROOT%%\\Temp\\%s' % (shadow, ntdsLocation[2:], tmpFileName))
 
-        if shouldRemove is True:
+        if shouldRemove:
             self.__executeRemote('%%COMSPEC%% /C vssadmin delete shadows /For=%s /Quiet' % ntdsDrive)
 
         self.__smbConnection.deleteFile('ADMIN$', 'Temp\\__output')
 
-        remoteFileName = RemoteFile(self.__smbConnection, 'Temp\\%s' % tmpFileName)
-
-        return remoteFileName
+        return RemoteFile(self.__smbConnection, 'Temp\\%s' % tmpFileName)
 
 class CryptoCommon:
     # Common crypto stuff used over different classes
     def transformKey(self, InputKey):
         # Section 2.2.11.1.2 Encrypting a 64-Bit Block with a 7-Byte Key
-        OutputKey = []
-        OutputKey.append( chr(ord(InputKey[0]) >> 0x01) )
-        OutputKey.append( chr(((ord(InputKey[0])&0x01)<<6) | (ord(InputKey[1])>>2)) )
-        OutputKey.append( chr(((ord(InputKey[1])&0x03)<<5) | (ord(InputKey[2])>>3)) )
-        OutputKey.append( chr(((ord(InputKey[2])&0x07)<<4) | (ord(InputKey[3])>>4)) )
-        OutputKey.append( chr(((ord(InputKey[3])&0x0F)<<3) | (ord(InputKey[4])>>5)) )
-        OutputKey.append( chr(((ord(InputKey[4])&0x1F)<<2) | (ord(InputKey[5])>>6)) )
-        OutputKey.append( chr(((ord(InputKey[5])&0x3F)<<1) | (ord(InputKey[6])>>7)) )
-        OutputKey.append( chr(ord(InputKey[6]) & 0x7F) )
+        OutputKey = [
+            chr(ord(InputKey[0]) >> 0x01),
+            chr(((ord(InputKey[0]) & 0x01) << 6) | (ord(InputKey[1]) >> 2)),
+            chr(((ord(InputKey[1]) & 0x03) << 5) | (ord(InputKey[2]) >> 3)),
+            chr(((ord(InputKey[2]) & 0x07) << 4) | (ord(InputKey[3]) >> 4)),
+            chr(((ord(InputKey[3]) & 0x0F) << 3) | (ord(InputKey[4]) >> 5)),
+            chr(((ord(InputKey[4]) & 0x1F) << 2) | (ord(InputKey[5]) >> 6)),
+            chr(((ord(InputKey[5]) & 0x3F) << 1) | (ord(InputKey[6]) >> 7)),
+            chr(ord(InputKey[6]) & 0x7F),
+        ]
 
         for i in range(8):
             OutputKey[i] = chr((ord(OutputKey[i]) << 1) & 0xfe)
@@ -846,9 +846,7 @@ class OfflineRegistry:
         if parentKey is None:
             return
 
-        keys = self.__registryHive.enumKey(parentKey)
-
-        return keys
+        return self.__registryHive.enumKey(parentKey)
 
     def enumValues(self, searchKey):
         key = self.__registryHive.findKey(searchKey)
@@ -856,9 +854,7 @@ class OfflineRegistry:
         if key is None:
             return
 
-        values = self.__registryHive.enumValues(key)
-
-        return values
+        return self.__registryHive.enumValues(key)
 
     def getValue(self, keyValue):
         value = self.__registryHive.getValue(keyValue)
@@ -927,9 +923,7 @@ class SAMHashes(OfflineRegistry):
         rc4 = ARC4.new(rc4Key)
         key = rc4.encrypt(cryptedHash)
 
-        decryptedHash = Crypt1.decrypt(key[:8]) + Crypt2.decrypt(key[8:])
-
-        return decryptedHash
+        return Crypt1.decrypt(key[:8]) + Crypt2.decrypt(key[8:])
 
     def dump(self):
         NTPASSWORD = "NTPASSWORD\0"
@@ -987,7 +981,7 @@ class SAMHashes(OfflineRegistry):
     def export(self, fileName):
         if len(self.__itemsFound) > 0:
             items = sorted(self.__itemsFound)
-            fd = codecs.open(fileName+'.sam','w+', encoding='utf-8')
+            fd = codecs.open(f'{fileName}.sam', 'w+', encoding='utf-8')
             for item in items:
                 fd.write(self.__itemsFound[item]+'\n')
             fd.close()
@@ -1015,7 +1009,7 @@ class LSASecrets(OfflineRegistry):
     def __sha256(self, key, value, rounds=1000):
         sha = hashlib.sha256()
         sha.update(key)
-        for i in range(1000):
+        for _ in range(1000):
             sha.update(value)
         return sha.digest()
 
@@ -1027,7 +1021,7 @@ class LSASecrets(OfflineRegistry):
         value = value[len(value)-encryptedSecretSize:]
 
         key0 = key
-        for i in range(0, len(value), 8):
+        for _ in range(0, len(value), 8):
             cipherText = value[:8]
             tmpStrKey = key0[:7]
             tmpKey = self.__cryptoCommon.transformKey(tmpStrKey)
@@ -1047,8 +1041,7 @@ class LSASecrets(OfflineRegistry):
         rc4key = hmac_md5.digest()
 
         rc4 = ARC4.new(rc4key)
-        data = rc4.encrypt(value)
-        return data
+        return rc4.encrypt(value)
 
     def __decryptLSA(self, value):
         if self.__vistaStyle is True:
@@ -1062,7 +1055,7 @@ class LSASecrets(OfflineRegistry):
         else:
             md5 = hashlib.new('md5')
             md5.update(self.__bootKey)
-            for i in range(1000):
+            for _ in range(1000):
                 md5.update(value[60:76])
             tmpKey = md5.digest()
             rc4 = ARC4.new(tmpKey)
@@ -1078,9 +1071,9 @@ class LSASecrets(OfflineRegistry):
             # Second chance
             value = self.getValue('\\Policy\\PolSecretEncryptionKey\\default')
             self.__vistaStyle = False
-            if value is None:
-                # No way :(
-                return None
+        if value is None:
+            # No way :(
+            return None
 
         self.__decryptLSA(value[1])
 
@@ -1097,10 +1090,7 @@ class LSASecrets(OfflineRegistry):
             self.__NKLMKey = self.__decryptSecret(self.__LSAKey, value[1])
 
     def __pad(self, data):
-        if (data & 0x3) > 0:
-            return data + (data & 0x3)
-        else:
-            return data
+        return data + (data & 0x3) if (data & 0x3) > 0 else data
 
     def dumpCachedHashes(self):
         if self.__securityFile is None:
@@ -1248,7 +1238,7 @@ class LSASecrets(OfflineRegistry):
             self.__getLSASecretKey()
 
         for key in keys:
-            logging.debug('Looking into %s' % key)
+            logging.debug(f'Looking into {key}')
             value = self.getValue('\\Policy\\Secrets\\%s\\CurrVal\\default' % key)
 
             if value is not None:
@@ -1265,14 +1255,14 @@ class LSASecrets(OfflineRegistry):
 
     def exportSecrets(self, fileName):
         if len(self.__secretItems) > 0:
-            fd = codecs.open(fileName+'.secrets','w+', encoding='utf-8')
+            fd = codecs.open(f'{fileName}.secrets', 'w+', encoding='utf-8')
             for item in self.__secretItems:
                 fd.write(item+'\n')
             fd.close()
 
     def exportCached(self, fileName):
         if len(self.__cachedItems) > 0:
-            fd = codecs.open(fileName+'.cached','w+', encoding='utf-8')
+            fd = codecs.open(f'{fileName}.cached', 'w+', encoding='utf-8')
             for item in self.__cachedItems:
                 fd.write(item+'\n')
             fd.close()
@@ -1402,8 +1392,8 @@ class NTDSHashes:
         if self.__NTDS is not None:
             self.__ESEDB = ESENT_DB(ntdsFile, isRemote = isRemote)
             self.__cursor = self.__ESEDB.openTable('datatable')
-        self.__tmpUsers = list()
-        self.__PEK = list() 
+        self.__tmpUsers = []
+        self.__PEK = []
         self.__cryptoCommon = CryptoCommon()
         self.__kerberosKeys = OrderedDict()
         self.__clearTextPwds = OrderedDict()
@@ -1435,14 +1425,14 @@ class NTDSHashes:
                 # Okey.. we found some users, but we're not yet ready to process them.
                 # Let's just store them in a temp list
                 self.__tmpUsers.append(record)
-        
+
         if peklist is not None:
             encryptedPekList = self.PEKLIST_ENC(peklist)
             if encryptedPekList['Header'][:4] == '\x02\x00\x00\x00':
                 # Up to Windows 2012 R2 looks like header starts this way
                 md5 = hashlib.new('md5')
                 md5.update(self.__bootKey)
-                for i in range(1000):
+                for _ in range(1000):
                     md5.update(encryptedPekList['KeyMaterial'])
                 tmpKey = md5.digest()
                 rc4 = ARC4.new(tmpKey)
@@ -1475,9 +1465,7 @@ class NTDSHashes:
         md5.update(cryptedHash['KeyMaterial'])
         tmpKey = md5.digest()
         rc4 = ARC4.new(tmpKey)
-        plainText = rc4.encrypt(cryptedHash['EncryptedHash'])
-
-        return plainText
+        return rc4.encrypt(cryptedHash['EncryptedHash'])
 
     def __removeDESLayer(self, cryptedHash, rid):
         Key1,Key2 = self.__cryptoCommon.deriveKey(int(rid))
@@ -1485,9 +1473,7 @@ class NTDSHashes:
         Crypt1 = DES.new(Key1, DES.MODE_ECB)
         Crypt2 = DES.new(Key2, DES.MODE_ECB)
 
-        decryptedHash = Crypt1.decrypt(cryptedHash[:8]) + Crypt2.decrypt(cryptedHash[8:])
-
-        return decryptedHash
+        return Crypt1.decrypt(cryptedHash[:8]) + Crypt2.decrypt(cryptedHash[8:])
 
     @staticmethod
     def __fileTimeToDateTime(t):
@@ -1495,9 +1481,8 @@ class NTDSHashes:
         t /= 10000000
         if t < 0:
             return 'never'
-        else:
-            dt = datetime.fromtimestamp(t)
-            return dt.strftime("%Y-%m-%d %H:%M")
+        dt = datetime.fromtimestamp(t)
+        return dt.strftime("%Y-%m-%d %H:%M")
 
     def __decryptSupplementalInfo(self, record, prefixTable=None, keysFile=None, clearTextFile=None):
         # This is based on [MS-SAMR] 2.2.10 Supplemental Credentials Structures
@@ -2093,15 +2078,13 @@ class LocalOperations:
         self.__systemHive = systemHive
 
     def getBootKey(self):
-        # Local Version whenever we are given the files directly
-        bootKey = ''
         tmpKey = ''
         winreg = winregistry.Registry(self.__systemHive, False)
         # We gotta find out the Current Control Set
         currentControlSet = winreg.getValue('\\Select\\Current')[1]
         currentControlSet = "ControlSet%03d" % currentControlSet
         for key in ['JD', 'Skew1', 'GBG', 'Data']:
-            logging.debug('Retrieving class info for %s' % key)
+            logging.debug(f'Retrieving class info for {key}')
             ans = winreg.getClass('\\%s\\Control\\Lsa\\%s' % (currentControlSet, key))
             digit = ans[:16].decode('utf-16le')
             tmpKey = tmpKey + digit
@@ -2110,10 +2093,8 @@ class LocalOperations:
 
         tmpKey = unhexlify(tmpKey)
 
-        for i in xrange(len(tmpKey)):
-            bootKey += tmpKey[transforms[i]]
-
-        logging.info('Target system bootKey: 0x%s' % hexlify(bootKey))
+        bootKey = ''.join(tmpKey[transforms[i]] for i in xrange(len(tmpKey)))
+        logging.info(f'Target system bootKey: 0x{hexlify(bootKey)}')
 
         return bootKey
 
@@ -2127,11 +2108,7 @@ class LocalOperations:
 
         # noLmHash = winreg.getValue('\\%s\\Control\\Lsa\\NoLmHash' % currentControlSet)[1]
         noLmHash = winreg.getValue('\\%s\\Control\\Lsa\\NoLmHash' % currentControlSet)
-        if noLmHash is not None:
-            noLmHash = noLmHash[1]
-        else:
-            noLmHash = 0
-
+        noLmHash = noLmHash[1] if noLmHash is not None else 0
         if noLmHash != 1:
             logging.debug('LMHashes are being stored')
             return False
